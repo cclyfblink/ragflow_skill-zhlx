@@ -67,8 +67,7 @@ def configure_stdio_utf8() -> None:
 
 def add_runtime_config_arguments(parser: Any) -> None:
     requirement = (
-        f"Runtime prerequisites: set {RAGFLOW_API_URL_ENV} and {RAGFLOW_API_KEY_ENV} "
-        "in the environment before running this script."
+        f"运行前需要在环境变量中设置 {RAGFLOW_API_URL_ENV} 和 {RAGFLOW_API_KEY_ENV}。"
     )
     existing_epilog = getattr(parser, "epilog", None)
     parser.epilog = f"{existing_epilog}\n\n{requirement}" if existing_epilog else requirement
@@ -78,7 +77,7 @@ def _require_env_var(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if value:
         return value
-    raise ConfigError(f"{name} environment variable is required.")
+    raise ConfigError(f"缺少环境变量：{name}。")
 
 
 def resolve_base_url(cli_base_url: str | None = None) -> str:
@@ -87,7 +86,7 @@ def resolve_base_url(cli_base_url: str | None = None) -> str:
     parsed = urllib.parse.urlsplit(base_url)
     if not parsed.scheme or not parsed.netloc:
         raise ConfigError(
-            f"Invalid {RAGFLOW_API_URL_ENV}. Use an absolute URL such as http://127.0.0.1:9380."
+            f"{RAGFLOW_API_URL_ENV} 无效，请使用完整地址，例如 http://127.0.0.1:9380。"
         )
     return base_url.rstrip("/")
 
@@ -107,10 +106,10 @@ def decode_json_response(body: bytes) -> dict[str, Any]:
     try:
         payload = json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise ApiError("Received a non-JSON response from the server.") from exc
+        raise ApiError("服务端返回的不是 JSON。") from exc
 
     if not isinstance(payload, dict):
-        raise DataError("Expected a JSON object from the server.")
+        raise DataError("服务端响应应为 JSON 对象。")
     return payload
 
 
@@ -196,7 +195,7 @@ def request_json(
                 response_body=response_text,
             ) from None
         raise ApiError(
-            f"HTTP request failed with status {exc.code}.",
+            f"HTTP 请求失败，状态码：{exc.code}。",
             http_status=exc.code,
             api_code=response_payload.get("code") if isinstance(response_payload, dict) else None,
             response_payload=response_payload,
@@ -204,13 +203,13 @@ def request_json(
         ) from None
     except urllib.error.URLError as exc:
         reason = getattr(exc, "reason", exc)
-        raise ApiError(f"HTTP request failed: {reason}") from None
+        raise ApiError(f"HTTP 请求失败：{reason}") from None
 
 
 def ensure_success(payload: dict[str, Any]) -> dict[str, Any]:
     code = payload.get("code")
     if code != 0:
-        message = payload.get("message") or f"API returned code {code}."
+        message = payload.get("message") or f"API 返回错误码：{code}。"
         raise ApiError(str(message), api_code=code, response_payload=payload)
     return payload
 

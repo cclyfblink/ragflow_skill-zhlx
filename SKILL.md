@@ -1,6 +1,6 @@
 ---
 name: ragflow-dataset-ingest
-description: "Use for RAGFlow dataset tasks: create, list, inspect, update, or delete datasets; upload, list, update, or delete documents; start or stop parsing; check parse status; retrieve chunks with `search.py`; and list configured models."
+description: "仅当用户明确要求查询智慧绿行、绿行、公司内部资料、公司知识库、RAGFlow 知识库或 zhlx 知识库时使用。用于只读检索当前 RAGFlow 账号可访问的知识库资料；不要用于代码任务、Git 操作、通用问答、网页搜索，或未明确要求查询内部知识库的领域问题。"
 metadata:
   openclaw:
     requires:
@@ -12,63 +12,60 @@ metadata:
     primaryEnv: RAGFLOW_API_KEY
 ---
 
-# RAGFlow Dataset And Retrieval
+# 智慧绿行内部知识库查询
 
-Use only the bundled scripts in `scripts/`.
-Prefer `--json` so returned fields can be relayed exactly.
-Follow `reference.md` for all user-facing output.
+这个 skill 只用于查询智慧绿行内部知识库中的资料。智慧绿行/绿行只表示知识库入口或内部资料来源，不表示政策、标准、通知的发布主体。
 
-## Use This Skill When
+只能使用 `scripts/` 里的只读脚本。优先加 `--json`，便于准确读取字段。对外回答遵循 `reference.md`。
 
-- the user wants to create, list, inspect, update, or delete RAGFlow datasets
-- the user wants to upload, list, update, or delete documents in a dataset
-- the user wants to start parsing, stop parsing, or check parse progress
-- the user wants to retrieve chunks from one or more datasets
-- the user wants to list configured RAGFlow models
+## 触发规则
 
-## Core Workflow
+只有用户明确要求查询内部知识库时才使用本 skill。
 
-1. Resolve the target dataset or document IDs first.
-2. Run the matching script from `scripts/`.
-3. Use `--json` unless a script only needs a simple text response.
-4. Return API fields exactly; do not guess missing details.
+可以触发的表达包括：
 
-Common commands:
+- 查智慧绿行知识库
+- 查绿行知识库
+- 查绿行资料里关于某事项的规定、通知、标准
+- 查智慧绿行过往项目
+- 查绿行项目资料
+- 查公司知识库
+- 查内部资料
+- 用 RAGFlow 查
+- 用 zhlx 知识库查
+- 直接点名 `$ragflow-dataset-ingest`
+
+不要因为用户只提到普通主题词就自动触发，例如：通州、AQI、零碳园区、政策、标准、项目、污染源。
+
+## 使用边界
+
+- 只读查询，不创建、不上传、不更新、不删除、不启动解析、不停止解析。
+- 权限分桶由 RAGFlow 用户和 API key 管理，本 skill 不维护本地 dataset 白名单。
+- 用户没指定知识库时，默认查询当前 API key 可访问的全部知识库。
+- 用户指定知识库名称、主题或文件名时，先在当前可访问知识库中匹配；匹配不明确时说明候选项。
+- 政府文件、标准、通知必须按原始来源表述，不能写成“绿行规定”。
+- 公司项目资料可以表述为“根据智慧绿行项目资料/内部资料”。
+- 没检索到时明确说“当前可访问知识库未检索到相关资料”，不要编造。
+
+## 常用命令
 
 ```bash
+python3 scripts/search.py "查询问题" --json
+python3 scripts/search.py "查询问题" "知识库名称或ID" --json
+python3 scripts/search.py "查询问题" --dataset-name "知识库名称关键词" --json
+python3 scripts/search.py "查询问题" --document-name "文件名关键词" --json
+python3 scripts/search.py "查询问题" --dataset-ids DATASET_ID1,DATASET_ID2 --json
+python3 scripts/search.py "查询问题" --doc-ids DOC_ID1,DOC_ID2 --json
 python3 scripts/datasets.py list --json
-python3 scripts/datasets.py info DATASET_ID --json
-python3 scripts/datasets.py create "Example Dataset" --description "Quarterly reports" --json
-python3 scripts/update_dataset.py DATASET_ID --name "Updated Dataset" --json
-python3 scripts/upload.py DATASET_ID /path/to/file.pdf --json
-python3 scripts/upload.py list DATASET_ID --json
-python3 scripts/update_document.py DATASET_ID DOC_ID --name "Updated Document" --json
-python3 scripts/parse.py DATASET_ID DOC_ID1 [DOC_ID2 ...] --json
-python3 scripts/stop_parse_documents.py DATASET_ID DOC_ID1 [DOC_ID2 ...] --json
-python3 scripts/parse_status.py DATASET_ID --json
-python3 scripts/search.py "query" --json
-python3 scripts/search.py "query" DATASET_ID --json
-python3 scripts/search.py --dataset-ids DATASET_ID1,DATASET_ID2 --doc-ids DOC_ID1,DOC_ID2 "query" --json
-python3 scripts/search.py --retrieval-test --kb-id DATASET_ID "query" --json
-python3 scripts/list_models.py --json
+python3 scripts/datasets.py info "知识库名称或ID" --json
+python3 scripts/list_documents.py DATASET_ID --json
+python3 scripts/list_documents.py DATASET_ID --name "文件名关键词" --json
 ```
 
-## Guardrails
+## 回答要求
 
-- For any delete action, list the exact items first and require explicit user confirmation before executing.
-- Delete only by explicit dataset IDs or document IDs. If the user gives names or fuzzy descriptions, resolve IDs first.
-- Upload does not start parsing. Start parsing only when the user asks for it.
-- `parse.py` returns immediately after the start request; use `parse_status.py` for progress.
-- For progress requests, use `parse_status.py` on the most specific scope available:
-  - dataset specified: inspect that dataset
-  - document IDs specified: pass `--doc-ids`
-  - no dataset specified: list datasets first, then aggregate status across datasets
-- If a parse status result includes `progress_msg`, surface it directly. For `FAIL`, treat it as the primary error detail.
-- Use `--retrieval-test` only for single-dataset debugging or when the user explicitly asks for that endpoint.
-
-## Output Rules
-
-- Follow `reference.md`.
-- Use tables for 3+ items when possible.
-- Preserve `api_error`, `error`, `message`, and related fields exactly as returned.
-- Never fabricate progress percentages or inferred causes.
+- 先给结论，再列来源。
+- 说明命中的知识库名、文档名和来源类型。
+- 对政策、标准、通知，使用“根据某某文件/某某部门发布的文件”。
+- 对项目、方案、内部材料，使用“根据智慧绿行项目资料/内部资料”。
+- 保留 API 返回的关键错误信息，不猜测不存在的字段。
