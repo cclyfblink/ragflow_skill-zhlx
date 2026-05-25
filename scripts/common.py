@@ -183,6 +183,21 @@ def serialize_script_error(exc: ScriptError) -> dict[str, Any]:
     return payload
 
 
+def success_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {"ok": True, **payload}
+
+
+def error_payload(exc: ScriptError, **extra: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "ok": False,
+        "checked_at": current_timestamp(),
+        "error": str(exc),
+        "error_detail": serialize_script_error(exc),
+    }
+    payload.update(extra)
+    return payload
+
+
 def request_json(
     url: str,
     api_key: str,

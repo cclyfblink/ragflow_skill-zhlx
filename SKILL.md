@@ -79,20 +79,31 @@ python3 scripts/check_config.py check --json
 - 公司项目资料可以表述为“根据智慧绿行项目资料/内部资料”。
 - 没检索到时明确说“当前可访问知识库未检索到相关资料”，不要编造。
 
+## Agent 召回工作流
+
+- 默认内部资料问题，优先调用 `scripts/retrieve.py "问题" --json`，它会先 hybrid 检索，必要时自动 broad/keyword 重试，并展开关键 chunk 上下文。
+- 需要精细控制时，调用 `scripts/search.py "问题" --mode hybrid --json`，低置信再用 `--mode broad`。
+- 用户提到文件名、表名、编号、政策名、客户名时，用 `--document-name` 或 `--mode keyword`。
+- 用户指定年份、部门、项目、文档类型时，先用 `scripts/datasets.py metadata DATASET_ID --json` 查看可见字段，再带 `--metadata-condition` 检索。
+- 最终回答引用关键证据前，可对主要 chunk 调用 `scripts/chunks.py expand`，避免只看孤立片段。
+- RAGFlow 检索结果和本地代码/文件冲突时，本地文件代表当前实现事实，RAGFlow 作为背景资料来源。
+
 ## 常用命令
 
 查询：
 
 ```bash
 python3 scripts/check_config.py check --json
-python3 scripts/search.py "查询问题" --json
-python3 scripts/search.py "查询问题" "知识库名称或ID" --json
-python3 scripts/search.py "查询问题" --dataset-name "知识库名称关键词" --json
-python3 scripts/search.py "查询问题" --document-name "文件名关键词" --json
-python3 scripts/search.py "查询问题" --dataset-ids DATASET_ID1,DATASET_ID2 --json
-python3 scripts/search.py "查询问题" --doc-ids DOC_ID1,DOC_ID2 --json
+python3 scripts/retrieve.py "查询问题" --json
+python3 scripts/retrieve.py "查询问题" --dataset-name "统计年鉴" --json
+python3 scripts/search.py "查询问题" --mode hybrid --json
+python3 scripts/search.py "查询问题" --mode broad --dataset-name "知识库名称关键词" --json
+python3 scripts/search.py "查询问题" --mode keyword --document-name "文件名关键词" --json
+python3 scripts/search.py "查询问题" --metadata-condition "{\"year\":\"2024\"}" --cross-languages "Chinese,English" --json
+python3 scripts/chunks.py expand DATASET_ID DOCUMENT_ID CHUNK_ID --before 2 --after 2 --json
 python3 scripts/datasets.py list --json
 python3 scripts/datasets.py info "知识库名称或ID" --json
+python3 scripts/datasets.py metadata DATASET_ID --json
 python3 scripts/list_documents.py DATASET_ID --json
 python3 scripts/list_documents.py DATASET_ID --name "文件名关键词" --json
 ```
@@ -121,6 +132,7 @@ python3 scripts/update_document.py DATASET_ID DOC_ID --name "新文档名.pdf" -
 
 - 先给结论，再列来源。
 - 说明命中的知识库名、文档名和来源类型。
+- `source_type_inferred` 只是脚本推断，不能替代原文发布主体或文件来源。
 - 对政策、标准、通知，使用“根据某某文件/某某部门发布的文件”。
 - 对项目、方案、内部材料，使用“根据智慧绿行项目资料/内部资料”。
 - 保留 API 返回的关键错误信息，不猜测不存在的字段。

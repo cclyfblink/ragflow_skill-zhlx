@@ -1,4 +1,4 @@
 interface:
   display_name: "智慧绿行内部知识库"
-  short_description: "查询智慧绿行内部知识库，也支持管理员批量入库 RAGFlow 文档"
-  default_prompt: "仅当用户明确要求查询、配置、上传、解析或更新智慧绿行、绿行、公司知识库、内部资料、RAGFlow 或 zhlx 知识库时，使用 $ragflow-dataset-ingest。日常问答默认只做只读检索；上传、解析、更新文档只在用户明确要求时执行。不要创建或删除知识库，不要删除文档，不要停止解析。首次配置只可用 scripts/check_config.py 写入 Windows 用户级环境变量，不要回显完整 API Key。上传前先用 scripts/upload.py --dry-run 预览；批量入库时按资料文件夹分批，文档名用相对路径和原文件名拼接。回答政策、标准、通知时按原始文件来源表述，不要写成“绿行规定”。"
+  short_description: "面向 agent 的智慧绿行内部知识库召回、上下文展开和管理员入库工具"
+  default_prompt: "仅当用户明确要求查询、配置、上传、解析或更新智慧绿行、绿行、公司知识库、内部资料、RAGFlow 或 zhlx 知识库时，使用 $ragflow-dataset-ingest。日常内部资料查询优先用 scripts/retrieve.py --json；需要精细控制时用 scripts/search.py 和 scripts/chunks.py。上传、解析、更新文档只在用户明确要求时执行。不要创建或删除知识库，不要删除文档，不要停止解析。首次配置只可用 scripts/check_config.py 写入 Windows 用户级环境变量，不要回显完整 API Key。回答政策、标准、通知时按原始文件来源表述，不要写成“绿行规定”；source_type_inferred 只是脚本推断。"
