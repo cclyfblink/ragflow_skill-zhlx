@@ -74,10 +74,32 @@ def add_runtime_config_arguments(parser: Any) -> None:
 
 
 def _require_env_var(name: str) -> str:
-    value = os.environ.get(name, "").strip()
+    value = _get_env_var(name)
     if value:
         return value
     raise ConfigError(f"缺少环境变量：{name}。")
+
+
+def _get_windows_user_env_var(name: str) -> str:
+    if sys.platform != "win32":
+        return ""
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            value, _value_type = winreg.QueryValueEx(key, name)
+    except FileNotFoundError:
+        return ""
+    except OSError:
+        return ""
+    return str(value).strip()
+
+
+def _get_env_var(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if value:
+        return value
+    return _get_windows_user_env_var(name)
 
 
 def resolve_base_url(cli_base_url: str | None = None) -> str:
