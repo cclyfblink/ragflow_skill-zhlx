@@ -18,11 +18,6 @@ Use only the bundled scripts in `scripts/`.
 Prefer `--json` so returned fields can be relayed exactly.
 Follow `reference.md` for all user-facing output.
 
-## Acknowledgements
-
-This repository is a fork and continued development of the original RAGFlow skill project:
-https://clawhub.ai/yingfeng/ragflow-skill
-
 ## Use This Skill When
 
 - the user wants to create, list, inspect, update, or delete RAGFlow datasets
