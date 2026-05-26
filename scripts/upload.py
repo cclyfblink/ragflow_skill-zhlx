@@ -25,11 +25,12 @@ from common import (
     decode_json_response,
     decode_response_text,
     ensure_success,
+    error_payload,
     extract_error_message,
     format_json,
     request_json,
     resolve_runtime_config,
-    serialize_script_error,
+    success_payload,
 )
 
 SUPPORTED_EXTENSIONS = {
@@ -420,7 +421,7 @@ def build_plan(args: argparse.Namespace, *, base_url: str, api_key: str) -> tupl
                 retained.append(record)
         records = retained
 
-    plan = {
+    plan = success_payload({
         "planned_at": current_timestamp(),
         "dataset": {"id": dataset_id, "name": dataset.get("name")},
         "root": str(root) if root else None,
@@ -430,7 +431,7 @@ def build_plan(args: argparse.Namespace, *, base_url: str, api_key: str) -> tupl
         "batch_size": args.batch_size,
         "upload": _summarize(records),
         "skipped": skipped + duplicate_skipped,
-    }
+    })
     return plan, records
 
 
@@ -457,7 +458,7 @@ def execute_upload(
     if plan.get("start_parse"):
         parse_result = _start_parse(dataset_id, document_ids, base_url=base_url, api_key=api_key)
 
-    return {
+    return success_payload({
         "uploaded_at": current_timestamp(),
         "dataset": plan["dataset"],
         "uploaded_count": len(uploaded_documents),
@@ -465,7 +466,7 @@ def execute_upload(
         "document_ids": document_ids,
         "parse": parse_result,
         "skipped": plan["skipped"],
-    }
+    })
 
 
 def _format_plan_text(plan: dict[str, Any]) -> str:
@@ -525,16 +526,9 @@ def main(argv: list[str] | None = None) -> int:
         print(format_json(result) if args.json_output else _format_upload_text(result))
         return 0
     except ScriptError as exc:
+        payload = error_payload(exc)
         if args.json_output:
-            print(
-                format_json(
-                    {
-                        "failed_at": current_timestamp(),
-                        "error": str(exc),
-                        "error_detail": serialize_script_error(exc),
-                    }
-                )
-            )
+            print(format_json(payload))
         else:
             print(f"错误：{exc}", file=sys.stderr)
         return 1

@@ -12,10 +12,11 @@ from common import (
     configure_stdio_utf8,
     current_timestamp,
     ensure_success,
+    error_payload,
     format_json,
     request_json,
     resolve_runtime_config,
-    serialize_script_error,
+    success_payload,
 )
 
 
@@ -46,12 +47,12 @@ def start_parse(dataset_id: str, document_ids: list[str], *, base_url: str, api_
             content_type="application/json",
         )
     )
-    return {
+    return success_payload({
         "dataset_id": normalized_dataset_id,
         "document_ids": normalized_doc_ids,
         "parse_requested_at": current_timestamp(),
         "api_response": response,
-    }
+    })
 
 
 def _format_text(payload: dict[str, object]) -> str:
@@ -78,18 +79,9 @@ def main(argv: list[str] | None = None) -> int:
         print(format_json(payload) if args.json_output else _format_text(payload))
         return 0
     except ScriptError as exc:
+        payload = error_payload(exc, dataset_id=args.dataset_id, document_ids=args.document_ids)
         if args.json_output:
-            print(
-                format_json(
-                    {
-                        "dataset_id": args.dataset_id,
-                        "document_ids": args.document_ids,
-                        "parse_requested_at": current_timestamp(),
-                        "error": str(exc),
-                        "error_detail": serialize_script_error(exc),
-                    }
-                )
-            )
+            print(format_json(payload))
         else:
             print(f"错误：{exc}")
         return 1

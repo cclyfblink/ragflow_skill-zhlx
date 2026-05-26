@@ -9,14 +9,12 @@ import urllib.parse
 from typing import Any
 
 from common import (
-    ApiError,
     ConfigError,
-    DataError,
     ScriptError,
     current_timestamp,
-    ensure_success,
+    error_payload,
     format_json,
-    request_json,
+    success_payload,
 )
 from datasets import list_datasets
 
@@ -148,13 +146,13 @@ def _check() -> dict[str, Any]:
 
     if not config["api_url"] or not config["api_key"]:
         payload["connection"] = {"status": "未测试", "message": "缺少 API 地址或 API Key。"}
-        return payload
+        return success_payload(payload)
 
     try:
         payload["connection"] = _connection_payload(_validate_url(config["api_url"]), config["api_key"])
     except ScriptError as exc:
         payload["connection"] = {"status": "失败", "message": str(exc)}
-    return payload
+    return success_payload(payload)
 
 
 def _configure(args: argparse.Namespace) -> dict[str, Any]:
@@ -176,18 +174,18 @@ def _configure(args: argparse.Namespace) -> dict[str, Any]:
         "configured_at": current_timestamp(),
         "api_url": "已写入用户级环境变量",
         "api_key": _mask_secret(api_key),
-        "message": "配置已保存。新开的 Codex/终端会自动读取；当前脚本也已用新配置完成后续检查。",
+        "message": "配置已保存。新开的 Codex/终端会自动读取；当前脚本也已用新配置完成连接检查。",
     }
 
     if args.skip_test:
         payload["connection"] = {"status": "未测试", "message": "用户选择跳过连接测试。"}
-        return payload
+        return success_payload(payload)
 
     try:
         payload["connection"] = _connection_payload(api_url, api_key)
     except ScriptError as exc:
         payload["connection"] = {"status": "失败", "message": str(exc)}
-    return payload
+    return success_payload(payload)
 
 
 def _format_check(payload: dict[str, Any]) -> str:
@@ -233,8 +231,9 @@ def main(argv: list[str] | None = None) -> int:
         print(format_json(payload) if args.json_output else _format_check(payload))
         return 0
     except ScriptError as exc:
+        payload = error_payload(exc)
         if getattr(args, "json_output", False):
-            print(format_json({"checked_at": current_timestamp(), "error": str(exc)}))
+            print(format_json(payload))
         else:
             print(f"错误：{exc}")
         return 1

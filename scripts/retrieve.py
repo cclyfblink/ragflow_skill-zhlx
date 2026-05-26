@@ -21,6 +21,7 @@ from search import search
 LOW_CONFIDENCE_THRESHOLD = 0.28
 MIN_HYBRID_RESULTS = 2
 DEFAULT_EXPAND_TOP = 2
+DOCUMENT_READ_HINT_MIN_HITS = 2
 FILE_HINT_PATTERN = re.compile(
     r"(\.pdf|\.docx?|\.xlsx?|\.xls|《[^》]+》|[A-Za-z]{1,8}[-_/]?\d{2,}|表\s*\d+|[0-9]+[-_][0-9]+)"
 )
@@ -164,6 +165,37 @@ def _expand_key_chunks(
     return expansions
 
 
+def _recommended_next_actions(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_document: dict[tuple[str, str], dict[str, Any]] = {}
+    for chunk in chunks:
+        dataset_id = str(chunk.get("dataset_id") or "")
+        document_id = str(chunk.get("document_id") or "")
+        if not dataset_id or not document_id:
+            continue
+        key = (dataset_id, document_id)
+        item = by_document.setdefault(
+            key,
+            {
+                "action": "read_document",
+                "reason": "同一文档多次命中，适合读取整文 chunk 核对上下文。",
+                "dataset_id": dataset_id,
+                "document_id": document_id,
+                "dataset_name": chunk.get("dataset_name"),
+                "document_name": chunk.get("document_name"),
+                "hit_count": 0,
+                "command": f"python3 scripts/read_document.py {dataset_id} {document_id} --format markdown --json",
+            },
+        )
+        item["hit_count"] += 1
+
+    actions = [
+        item
+        for item in by_document.values()
+        if int(item.get("hit_count") or 0) >= DOCUMENT_READ_HINT_MIN_HITS
+    ]
+    return sorted(actions, key=lambda item: int(item.get("hit_count") or 0), reverse=True)[:3]
+
+
 def retrieve(args: argparse.Namespace, *, base_url: str, api_key: str) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     hybrid = search(_search_args(args, "hybrid"), base_url=base_url, api_key=api_key)
@@ -200,6 +232,7 @@ def retrieve(args: argparse.Namespace, *, base_url: str, api_key: str) -> dict[s
             "count": len(chunks),
             "chunks": chunks,
             "expansions": expansions,
+            "recommended_next_actions": _recommended_next_actions(chunks),
             "workflow_note": "retrieve.py 是高层封装；需要精细控制时可直接调用 search.py 和 chunks.py。",
         }
     )

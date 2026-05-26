@@ -7,7 +7,9 @@ from unittest import mock
 
 import chunks
 import list_documents
+import read_by_name
 import read_document
+import retrieve
 import search
 
 
@@ -152,6 +154,7 @@ def test_read_document_collects_pages_and_truncates() -> None:
             content_format="text",
             max_chars=8,
             page_size=2,
+            include_chunks=False,
             output=None,
             base_url="http://x",
             api_key="k",
@@ -163,6 +166,9 @@ def test_read_document_collects_pages_and_truncates() -> None:
     assert payload["chunk_count"] == 3
     assert payload["truncated"] is True
     assert payload["content"] == "第一段\n\n第二段"
+    assert payload["chunks"] == []
+    assert payload["chunks_included"] is False
+    assert payload["chunk_catalog"][0]["preview"] == "第一段"
 
 
 def test_read_document_markdown() -> None:
@@ -176,6 +182,7 @@ def test_read_document_markdown() -> None:
             content_format="markdown",
             max_chars=1000,
             page_size=100,
+            include_chunks=True,
             output=None,
             base_url="http://x",
             api_key="k",
@@ -185,6 +192,79 @@ def test_read_document_markdown() -> None:
     assert "# 文档.pdf" in payload["content"]
     assert "## Chunk 0" in payload["content"]
     assert payload["truncated"] is False
+    assert payload["chunks_included"] is True
+    assert payload["chunks"][0]["content"] == "正文"
+
+
+def test_retrieve_recommends_read_document() -> None:
+    chunks_payload = [
+        {"dataset_id": "ds1", "document_id": "doc1", "chunk_id": "c1", "dataset_name": "库", "document_name": "报告.pdf"},
+        {"dataset_id": "ds1", "document_id": "doc1", "chunk_id": "c2", "dataset_name": "库", "document_name": "报告.pdf"},
+        {"dataset_id": "ds1", "document_id": "doc2", "chunk_id": "c3", "dataset_name": "库", "document_name": "其他.pdf"},
+    ]
+
+    actions = retrieve._recommended_next_actions(chunks_payload)
+
+    assert len(actions) == 1
+    assert actions[0]["document_id"] == "doc1"
+    assert "read_document.py ds1 doc1" in actions[0]["command"]
+
+
+def test_read_by_name_multiple_matches() -> None:
+    docs = [
+        {"id": "doc1", "name": "目标报告2023.pdf", "dataset_id": "ds1"},
+        {"id": "doc2", "name": "目标报告2024.pdf", "dataset_id": "ds1"},
+    ]
+
+    def fake_fetch_page(**kwargs: Any) -> dict[str, Any]:
+        return {"docs": docs, "total": 2}
+
+    args = argparse.Namespace(
+        document_name="目标报告",
+        dataset="库",
+        format="markdown",
+        max_chars=1000,
+        page_size=100,
+        include_chunks=False,
+        output=None,
+        json_output=True,
+    )
+    with mock.patch.object(read_by_name, "list_datasets", return_value={"datasets": [{"id": "ds1", "name": "库"}]}):
+        with mock.patch.object(read_by_name, "_fetch_page", side_effect=fake_fetch_page):
+            payload = read_by_name.read_by_name(args, base_url="http://x", api_key="k")
+
+    assert payload["ok"] is True
+    assert payload["matched_count"] == 2
+    assert payload["read"] is None
+
+
+def test_read_by_name_single_match_reads_document() -> None:
+    docs = [{"id": "doc1", "name": "目标报告.pdf", "dataset_id": "ds1"}]
+
+    def fake_fetch_page(**kwargs: Any) -> dict[str, Any]:
+        return {"docs": docs, "total": 1}
+
+    def fake_read_document(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        return {"ok": True, "content": "正文"}
+
+    args = argparse.Namespace(
+        document_name="目标报告",
+        dataset="库",
+        format="markdown",
+        max_chars=1000,
+        page_size=100,
+        include_chunks=False,
+        output=None,
+        json_output=True,
+    )
+    with mock.patch.object(read_by_name, "list_datasets", return_value={"datasets": [{"id": "ds1", "name": "库"}]}):
+        with mock.patch.object(read_by_name, "_fetch_page", side_effect=fake_fetch_page):
+            with mock.patch.object(read_by_name, "read_document", side_effect=fake_read_document):
+                payload = read_by_name.read_by_name(args, base_url="http://x", api_key="k")
+
+    assert payload["ok"] is True
+    assert payload["matched_count"] == 1
+    assert payload["read"]["content"] == "正文"
 
 
 def main() -> int:
@@ -193,6 +273,9 @@ def main() -> int:
     test_chunks_expand()
     test_read_document_collects_pages_and_truncates()
     test_read_document_markdown()
+    test_retrieve_recommends_read_document()
+    test_read_by_name_multiple_matches()
+    test_read_by_name_single_match_reads_document()
     print("ok")
     return 0
 

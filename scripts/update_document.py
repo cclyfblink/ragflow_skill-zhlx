@@ -13,11 +13,12 @@ from common import (
     ScriptError,
     add_runtime_config_arguments,
     configure_stdio_utf8,
+    error_payload,
     ensure_success,
     format_json,
     request_json,
     resolve_runtime_config,
-    serialize_script_error,
+    success_payload,
 )
 
 
@@ -92,7 +93,15 @@ def update_document(args: argparse.Namespace, *, base_url: str, api_key: str) ->
     data = response.get("data")
     if not isinstance(data, dict):
         raise DataError("更新响应缺少 data 对象。")
-    return response
+    return success_payload(
+        {
+            "updated_at": response.get("data", {}).get("update_time") or response.get("data", {}).get("updated_at"),
+            "dataset_id": dataset_id,
+            "document_id": document_id,
+            "data": data,
+            "api_response": response,
+        }
+    )
 
 
 def _format_text(payload: dict[str, Any]) -> str:
@@ -119,17 +128,9 @@ def main(argv: list[str] | None = None) -> int:
         print(format_json(payload) if args.json_output else _format_text(payload))
         return 0
     except ScriptError as exc:
+        payload = error_payload(exc, dataset_id=args.dataset_id, document_id=args.document_id)
         if args.json_output:
-            print(
-                format_json(
-                    {
-                        "dataset_id": args.dataset_id,
-                        "document_id": args.document_id,
-                        "error": str(exc),
-                        "error_detail": serialize_script_error(exc),
-                    }
-                )
-            )
+            print(format_json(payload))
         else:
             print(f"错误：{exc}")
         return 1

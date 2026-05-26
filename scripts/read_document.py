@@ -34,6 +34,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--page-size", type=int, default=DEFAULT_PAGE_SIZE, help=f"扫描页大小，默认 {DEFAULT_PAGE_SIZE}")
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS, help=f"最大返回字符数，默认 {DEFAULT_MAX_CHARS}")
+    parser.add_argument("--include-chunks", action="store_true", help="在 JSON 中返回每个 chunk 的完整内容")
     parser.add_argument("--output", help="可选：把合并后的内容写入指定文件路径")
     parser.add_argument("--json", action="store_true", dest="json_output", help="输出 JSON")
     add_runtime_config_arguments(parser)
@@ -141,6 +142,23 @@ def _truncate_content(content: str, max_chars: int) -> tuple[str, bool]:
     return content[:max_chars], True
 
 
+def _chunk_catalog(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    catalog: list[dict[str, Any]] = []
+    for chunk in chunks:
+        content = str(chunk.get("content") or "")
+        catalog.append(
+            {
+                "index": chunk.get("index"),
+                "chunk_id": chunk.get("chunk_id"),
+                "content_chars": len(content),
+                "positions": chunk.get("positions"),
+                "metadata": chunk.get("metadata"),
+                "preview": content[:160],
+            }
+        )
+    return catalog
+
+
 def _write_output(path_value: str, content: str) -> str:
     path = Path(path_value).expanduser()
     if not path.parent.exists():
@@ -156,6 +174,7 @@ def read_document(
     content_format: str,
     max_chars: int,
     page_size: int,
+    include_chunks: bool,
     output: str | None,
     base_url: str,
     api_key: str,
@@ -194,8 +213,10 @@ def read_document(
             "truncated": truncated,
             "output_path": output_path,
             "content": content,
-            "chunks": normalized_chunks,
-            "note": "整文内容基于 RAGFlow chunk 列表顺序合并；如需严谨页序，请同时参考 positions。原始文件下载不在默认能力内。",
+            "chunk_catalog": _chunk_catalog(normalized_chunks),
+            "chunks": normalized_chunks if include_chunks else [],
+            "chunks_included": include_chunks,
+            "note": "整文内容基于 RAGFlow chunk 列表顺序合并；如需严谨页序，请同时参考 positions。此脚本只返回已解析文本，不返回原始文件。",
         }
     )
 
@@ -225,6 +246,7 @@ def main(argv: list[str] | None = None) -> int:
             content_format=args.format,
             max_chars=args.max_chars,
             page_size=args.page_size,
+            include_chunks=args.include_chunks,
             output=args.output,
             base_url=base_url,
             api_key=api_key,

@@ -13,10 +13,11 @@ from common import (
     configure_stdio_utf8,
     current_timestamp,
     ensure_success,
+    error_payload,
     format_json,
     request_json,
     resolve_runtime_config,
-    serialize_script_error,
+    success_payload,
 )
 
 DEFAULT_PAGE_SIZE = 100
@@ -120,12 +121,12 @@ def collect_status(dataset_id: str, target_ids: list[str] | None, *, base_url: s
             }
         )
 
-    return {
+    return success_payload({
         "dataset_id": normalized_dataset_id,
         "checked_at": current_timestamp(),
         "summary": summary,
         "documents": normalized_docs,
-    }
+    })
 
 
 def _format_text(payload: dict[str, Any]) -> str:
@@ -168,17 +169,9 @@ def main(argv: list[str] | None = None) -> int:
         print(format_json(payload) if args.json_output else _format_text(payload))
         return 0
     except ScriptError as exc:
+        payload = error_payload(exc, dataset_id=args.dataset_id)
         if args.json_output:
-            print(
-                format_json(
-                    {
-                        "dataset_id": args.dataset_id,
-                        "checked_at": current_timestamp(),
-                        "error": str(exc),
-                        "error_detail": serialize_script_error(exc),
-                    }
-                )
-            )
+            print(format_json(payload))
         else:
             print(f"错误：{exc}")
         return 1
