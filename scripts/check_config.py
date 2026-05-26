@@ -26,7 +26,7 @@ SMTO_ABORTIFHUNG = 0x0002
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="检查或配置智慧绿行知识库连接。")
+    parser = argparse.ArgumentParser(description="检查或配置 RAGFlow 知识库连接。")
     subparsers = parser.add_subparsers(dest="command")
 
     check_parser = subparsers.add_parser("check", help="检查当前配置和连接状态")

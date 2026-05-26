@@ -98,7 +98,7 @@ GOVERNMENT_SOURCE_HINTS = (
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="查询智慧绿行内部知识库中的相关资料。")
+    parser = argparse.ArgumentParser(description="查询 RAGFlow 知识库中的相关资料。")
     parser.add_argument("query", help="查询问题")
     parser.add_argument(
         "dataset",
@@ -339,7 +339,7 @@ def infer_source_type(document_name: str, dataset_name: str) -> str:
         return "政府文件/标准资料"
     if "政策" in dataset_name or "研究报告" in document_name or "报告" in document_name:
         return "外部公开资料/政策研究资料"
-    return "智慧绿行项目资料/内部资料"
+    return "项目资料/内部资料"
 
 
 def normalize_chunk(chunk: dict[str, Any], dataset_names: dict[str, str]) -> dict[str, Any]:

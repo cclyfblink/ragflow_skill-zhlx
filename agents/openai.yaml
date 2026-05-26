@@ -1,4 +1,4 @@
 interface:
-  display_name: "智慧绿行内部知识库"
-  short_description: "面向 agent 的智慧绿行内部知识库召回、上下文展开、整文 chunk 读取和管理员入库工具"
-  default_prompt: "仅当用户明确要求查询、配置、上传、解析或更新智慧绿行、绿行、公司知识库、内部资料、RAGFlow 或 zhlx 知识库时，使用 $ragflow-dataset-ingest。日常内部资料查询优先用 scripts/retrieve.py --json，类似远端语义 rg；需要精细控制时用 scripts/search.py；需要命中片段上下文时用 scripts/chunks.py expand，类似 rg -C；确认某个文档是核心来源后可用 scripts/read_document.py 读取全部 chunk，类似远端 cat；用户给出明确文件名但没有 ID 时用 scripts/read_by_name.py。上传、解析、更新文档只在用户明确要求时执行。不要创建或删除知识库，不要删除文档，不要停止解析。首次配置只可用 scripts/check_config.py 写入 Windows 用户级环境变量，不要回显完整 API Key。回答政策、标准、通知时按原始文件来源表述，不要写成“绿行规定”；source_type_inferred 只是脚本推断。"
+  display_name: "RAGFlow 知识库"
+  short_description: "面向 agent 的 RAGFlow 知识库召回、上下文展开、整文 chunk 读取和管理员入库工具"
+  default_prompt: "仅当用户明确要求查询、配置、上传、解析或更新 RAGFlow、知识库、内部知识库、企业知识库、项目资料库或文档库时，使用 $ragflow-knowledge-base。日常知识库查询优先用 scripts/retrieve.py --json，类似远端语义 rg；需要精细控制时用 scripts/search.py；需要命中片段上下文时用 scripts/chunks.py expand，类似 rg -C；确认某个文档是核心来源后可用 scripts/read_document.py 读取全部 chunk，类似远端 cat；用户给出明确文件名但没有 ID 时用 scripts/read_by_name.py。上传、解析、更新文档只在用户明确要求时执行。不要创建或删除知识库，不要删除文档，不要停止解析。首次配置只可用 scripts/check_config.py 写入 Windows 用户级环境变量，不要回显完整 API Key。回答政策、标准、通知时按原始文件来源表述；不要把知识库名称或组织名称写成发布主体；source_type_inferred 只是脚本推断。"

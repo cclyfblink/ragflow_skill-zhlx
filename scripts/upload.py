@@ -278,7 +278,7 @@ def _fetch_existing_document_names(dataset_id: str, *, base_url: str, api_key: s
 
 
 def _build_multipart(records: list[dict[str, Any]]) -> tuple[str, bytes]:
-    boundary = "----ZhlxRagflowBoundary" + uuid.uuid4().hex
+    boundary = "----RagflowSkillBoundary" + uuid.uuid4().hex
     body = bytearray()
 
     for record in records:
