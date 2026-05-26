@@ -1,5 +1,5 @@
 ---
-name: ragflow-knowledge-base
+name: ragflow-dataset-ingest
 description: "仅当用户明确要求查询 RAGFlow、知识库、内部知识库、项目资料库、企业知识库或文档库时使用；支持检索、chunk 上下文展开、按文档读取已解析文本、列知识库/文档，以及显式管理员入库操作。不要用于代码任务、Git 操作、通用问答、网页搜索，或未明确要求查询/维护 RAGFlow 知识库的领域问题。"
 metadata:
   requires:
@@ -40,7 +40,7 @@ metadata:
 - 上传文件到知识库
 - 解析 RAGFlow 文档
 - 更新 RAGFlow 文档名称或解析配置
-- 直接点名 `$ragflow-knowledge-base`
+- 直接点名 `$ragflow-dataset-ingest`
 
 不要因为用户只提到普通主题词就自动触发，例如：城市名、客户名、AQI、政策、标准、项目、污染源、报告。
 
