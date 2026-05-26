@@ -7,6 +7,7 @@ from unittest import mock
 
 import chunks
 import list_documents
+import read_document
 import search
 
 
@@ -129,10 +130,69 @@ def test_chunks_expand() -> None:
     assert [item["chunk_id"] for item in payload["chunks"]] == ["c1", "c2", "c3"]
 
 
+def test_read_document_collects_pages_and_truncates() -> None:
+    calls = []
+
+    def fake_request_json(url: str, api_key: str, **kwargs: Any) -> dict[str, Any]:
+        calls.append(url)
+        page = len(calls)
+        if page == 1:
+            chunks_payload = [
+                {"id": "c1", "content": "第一段", "document_keyword": "报告.pdf"},
+                {"id": "c2", "content": "第二段", "document_keyword": "报告.pdf"},
+            ]
+        else:
+            chunks_payload = [{"id": "c3", "content": "第三段", "document_keyword": "报告.pdf"}]
+        return {"code": 0, "data": {"chunks": chunks_payload, "total": 3}}
+
+    with mock.patch.object(chunks, "request_json", side_effect=fake_request_json):
+        payload = read_document.read_document(
+            "ds1",
+            "doc1",
+            content_format="text",
+            max_chars=8,
+            page_size=2,
+            output=None,
+            base_url="http://x",
+            api_key="k",
+        )
+
+    assert len(calls) == 2
+    assert payload["ok"] is True
+    assert payload["document_name"] == "报告.pdf"
+    assert payload["chunk_count"] == 3
+    assert payload["truncated"] is True
+    assert payload["content"] == "第一段\n\n第二段"
+
+
+def test_read_document_markdown() -> None:
+    def fake_fetch_all_chunks(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        return [{"id": "c1", "content": "正文", "document_keyword": "文档.pdf"}]
+
+    with mock.patch.object(read_document, "_fetch_all_chunks", side_effect=fake_fetch_all_chunks):
+        payload = read_document.read_document(
+            "ds1",
+            "doc1",
+            content_format="markdown",
+            max_chars=1000,
+            page_size=100,
+            output=None,
+            base_url="http://x",
+            api_key="k",
+        )
+
+    assert payload["ok"] is True
+    assert "# 文档.pdf" in payload["content"]
+    assert "## Chunk 0" in payload["content"]
+    assert payload["truncated"] is False
+
+
 def main() -> int:
     test_search_mode_mapping()
     test_list_documents_name_scans_pages()
     test_chunks_expand()
+    test_read_document_collects_pages_and_truncates()
+    test_read_document_markdown()
     print("ok")
     return 0
 

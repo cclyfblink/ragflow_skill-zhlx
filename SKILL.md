@@ -1,6 +1,6 @@
 ---
 name: ragflow-dataset-ingest
-description: "仅当用户明确要求查询智慧绿行、绿行、公司内部资料、公司知识库、RAGFlow 知识库或 zhlx 知识库时使用；也可在用户明确要求上传、解析或更新 RAGFlow 文档时作为管理员入库工具使用。不要用于代码任务、Git 操作、通用问答、网页搜索，或未明确要求查询/维护内部知识库的领域问题。"
+description: "仅当用户明确要求查询智慧绿行、绿行、公司内部资料、公司知识库、RAGFlow 知识库或 zhlx 知识库时使用；支持检索、chunk 上下文展开和整文 chunk 读取；也可在用户明确要求上传、解析或更新 RAGFlow 文档时作为管理员入库工具使用。不要用于代码任务、Git 操作、通用问答、网页搜索，或未明确要求查询/维护内部知识库的领域问题。"
 metadata:
   openclaw:
     requires:
@@ -69,6 +69,8 @@ python3 scripts/check_config.py check --json
 ## 使用边界
 
 - 日常问答只做只读查询。
+- `read_document.py` 读取的是 RAGFlow chunk 合并文本，用来补齐“整文读取”能力；它不等同于下载原始 PDF/Word。
+- 只有用户明确要求“下载原文件、打开完整文件、给我这个文件”时，才考虑后续原始文件下载能力；v1 默认不做原文件下载。
 - 上传、解析、更新文档属于管理员入库能力，只有用户明确要求时才使用。
 - 不创建、不删除知识库，不删除文档，不停止解析。
 - 权限分桶由 RAGFlow 用户和 API key 管理，本 skill 不维护本地 dataset 白名单。
@@ -81,11 +83,17 @@ python3 scripts/check_config.py check --json
 
 ## Agent 召回工作流
 
+- 可以把这些脚本理解成本地文件命令的远端版本：
+  - `retrieve.py` / `search.py` 类似远端语义版 `rg`，用于先找相关证据。
+  - `chunks.py expand` 类似 `rg -C`，用于读取命中片段前后的上下文。
+  - `read_document.py` 类似远端 `cat`，用于在确认某个文档很关键后读取该文档的全部 chunk。
+  - `list_documents.py --name` 类似远端文件名查找，用于先定位具体文档 ID。
 - 默认内部资料问题，优先调用 `scripts/retrieve.py "问题" --json`，它会先 hybrid 检索，必要时自动 broad/keyword 重试，并展开关键 chunk 上下文。
 - 需要精细控制时，调用 `scripts/search.py "问题" --mode hybrid --json`，低置信再用 `--mode broad`。
 - 用户提到文件名、表名、编号、政策名、客户名时，用 `--document-name` 或 `--mode keyword`。
 - 用户指定年份、部门、项目、文档类型时，先用 `scripts/datasets.py metadata DATASET_ID --json` 查看可见字段，再带 `--metadata-condition` 检索。
 - 最终回答引用关键证据前，可对主要 chunk 调用 `scripts/chunks.py expand`，避免只看孤立片段。
+- 如果检索结果显示某个文档是核心来源，且需要通读上下文、提取整份报告结构或核对多个章节，调用 `scripts/read_document.py DATASET_ID DOCUMENT_ID --format markdown --json`。默认读取 RAGFlow 已解析 chunk，不下载原始文件。
 - RAGFlow 检索结果和本地代码/文件冲突时，本地文件代表当前实现事实，RAGFlow 作为背景资料来源。
 
 ## 常用命令
@@ -101,6 +109,8 @@ python3 scripts/search.py "查询问题" --mode broad --dataset-name "知识库�
 python3 scripts/search.py "查询问题" --mode keyword --document-name "文件名关键词" --json
 python3 scripts/search.py "查询问题" --metadata-condition "{\"year\":\"2024\"}" --cross-languages "Chinese,English" --json
 python3 scripts/chunks.py expand DATASET_ID DOCUMENT_ID CHUNK_ID --before 2 --after 2 --json
+python3 scripts/read_document.py DATASET_ID DOCUMENT_ID --format markdown --max-chars 80000 --json
+python3 scripts/read_document.py DATASET_ID DOCUMENT_ID --format text --output "C:\Users\用户名\AppData\Local\Temp\ragflow-document.txt" --json
 python3 scripts/datasets.py list --json
 python3 scripts/datasets.py info "知识库名称或ID" --json
 python3 scripts/datasets.py metadata DATASET_ID --json
