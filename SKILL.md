@@ -58,7 +58,7 @@ python3 scripts/check_config.py configure --api-url "RAGFLOW_API_URL" --api-key 
 - 不要把 API Key 写入仓库文件、配置 JSON、日志、回答正文或临时文件。
 - 不要回显完整 API Key；只能说已配置，最多显示尾号。
 - 如果用户级环境变量已存在，不要覆盖，除非用户明确要求覆盖；覆盖时使用 `--force`。
-- 配置完成后提示用户新开的 Codex/终端会自动读取。当前脚本会立即使用新配置测试连接。
+- 配置完成后提示用户新开的 agent 会话或终端会自动读取。当前脚本会立即使用新配置测试连接。
 
 检查配置和连接：
 

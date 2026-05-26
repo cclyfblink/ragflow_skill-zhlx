@@ -1,6 +1,6 @@
 # ragflow-dataset-ingest
 
-Codex skill for RAGFlow knowledge base retrieval and controlled dataset ingest.
+Generic RAGFlow skill for knowledge base retrieval and controlled dataset ingest.
 
 这个仓库提供一个 RAGFlow 知识库查询与入库 skill，适合让 agent 通过 CLI 工具查询远端知识库、展开 chunk 上下文、读取已解析文档文本，并在明确要求时执行管理员入库操作。
 
@@ -50,7 +50,7 @@ python3 scripts/upload.py "知识库名称或ID" --root "D:\资料库根目录" 
 
 ## 安装
 
-可以从 GitHub Release 下载 zip 包，解压到 Codex skills 目录后使用。也可以直接把仓库内容放入本地 skill 目录。
+可以从 GitHub Release 下载 zip 包，解压到你的 agent/skill 运行环境后使用。也可以直接把仓库内容放入本地 skill 目录。
 
 ## License
 
