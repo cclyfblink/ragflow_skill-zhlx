@@ -127,7 +127,8 @@ python3 scripts/list_documents.py DATASET_ID --name "文件名关键词" --json
 
 ```bash
 python3 scripts/upload.py "知识库名称或ID" --root "D:\资料库根目录" --source "待上传子目录" --dry-run --json
-python3 scripts/upload.py "知识库名称或ID" --root "D:\资料库根目录" --source "待上传子目录" --batch-size 5 --start-parse --json
+python3 scripts/upload.py "知识库名称或ID" --root "D:\资料库根目录" --source "待上传子目录" --batch-size 5 --name-separator "-" --chunk-method naive --parser-config "{\"chunk_token_num\":512,\"delimiter\":\"\n\",\"layout_recognize\":\"DeepDOC\"}" --start-parse --json
+python3 scripts/upload.py "知识库名称或ID" --root "D:\资料库根目录" --source "待上传子目录" --meta-fields "{\"source_path\":\"资料分类/年份/文件名.pdf\",\"content_description\":\"这批文件的完整内容说明\",\"topic\":\"主题\",\"year\":\"年份\",\"document_type\":\"资料类型\"}" --json
 python3 scripts/parse_status.py DATASET_ID --json
 python3 scripts/parse.py DATASET_ID DOC_ID1 DOC_ID2 --json
 python3 scripts/update_document.py DATASET_ID DOC_ID --name "新文档名.pdf" --json
@@ -137,8 +138,12 @@ python3 scripts/update_document.py DATASET_ID DOC_ID --name "新文档名.pdf" -
 
 - 上传前先运行 `scripts/upload.py ... --dry-run --json`，确认待上传数量、样例文件名和跳过项。
 - 上传目录时按批次执行，优先一个资料文件夹一批；解析完成并测试召回后再传下一个文件夹。
-- 文档名使用相对路径拼接：根目录下的路径片段用 `__` 连接，例如 `资料分类__年份__文件名.pdf`。
-- 默认只上传可解析格式：`pdf/doc/docx/xls/xlsx/txt/md`。
+- 文档名使用相对路径拼接，默认用 `-` 连接路径片段，例如 `资料分类-年份-文件名.pdf`；需要其他连接符时使用 `--name-separator`。
+- 入库时尽量让远端文档名自己带有来源信息，优先包含资料分类、子目录、年份、版本、文件名；不要只用 `报告.pdf`、`扫描件.pdf` 这类无法判断来源的名称。
+- 批量上传时优先使用 `--meta-fields` 写入资料说明。常用字段包括 `source_path`、`content_description`、`topic`、`year`、`document_type`、`publisher`。`content_description` 应说明这批文件主要包含什么内容、覆盖年份或地区、适合回答什么问题。
+- 如果每个文件需要不同描述，按文件或小批次分别上传；不要为了省事给完全不同主题的文件写同一段笼统描述。
+- 默认只上传当前 RAGFlow 稳定可解析格式：`pdf/doc/docx/xlsx/txt`。旧版 `xls` 建议先另存或转换为 `xlsx` 后再入库。
+- 需要指定切片或解析方式时，使用 `--chunk-method` 和 `--parser-config`；上传后立即解析时再加 `--start-parse`。
 - 默认跳过知识库中已存在的同名文档；只有用户明确要求重复上传时才加 `--allow-duplicates`。
 - 不上传压缩包、CAJ/NH、图片、网页资源、程序文件、数据库文件。
 - 大文件建议先用 `--max-mb` 控制范围，解析稳定后再放宽。

@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import json
 import mimetypes
 import os
 import sys
@@ -37,10 +38,8 @@ SUPPORTED_EXTENSIONS = {
     ".pdf",
     ".doc",
     ".docx",
-    ".xls",
     ".xlsx",
     ".txt",
-    ".md",
 }
 DEFAULT_BATCH_SIZE = 5
 DEFAULT_PAGE_SIZE = 100
@@ -59,12 +58,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--extensions",
         default=",".join(sorted(SUPPORTED_EXTENSIONS)),
-        help="允许上传的后缀，逗号分隔，默认支持 pdf/doc/docx/xls/xlsx/txt/md",
+        help="允许上传的后缀，逗号分隔，默认支持 pdf/doc/docx/xlsx/txt",
     )
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help="每批上传文件数")
     parser.add_argument("--max-mb", type=float, help="跳过超过该大小的文件")
     parser.add_argument("--dry-run", action="store_true", help="只预览，不上传")
     parser.add_argument("--start-parse", action="store_true", help="上传成功后立即请求解析")
+    parser.add_argument("--chunk-method", help="上传后写入文档切片方式，例如 naive")
+    parser.add_argument("--parser-config", help="上传后写入解析配置 JSON 对象，或 @path/to/file.json")
+    parser.add_argument("--meta-fields", help="上传后写入元数据 JSON 对象，或 @path/to/file.json")
+    parser.add_argument("--name-separator", default="-", help="相对路径片段连接符，默认 -")
+    parser.add_argument("--exclude-name", action="append", default=[], help="按文件名关键词跳过文件，可重复使用")
     parser.add_argument("--allow-duplicates", action="store_true", help="允许上传同名文档")
     parser.add_argument(
         "--max-name-length",
@@ -152,9 +156,10 @@ def _truncate_name(name: str, max_length: int) -> str:
     return f"{stem}__{_short_hash(name)}{suffix}"
 
 
-def _build_upload_name(path: Path, root: Path | None, max_length: int) -> str:
+def _build_upload_name(path: Path, root: Path | None, max_length: int, name_separator: str) -> str:
     relative_path = _try_relative(path, root)
-    name = "__".join(part for part in relative_path.parts if part not in ("", "."))
+    separator = name_separator or "-"
+    name = separator.join(part for part in relative_path.parts if part not in ("", "."))
     return _truncate_name(name, max_length)
 
 
@@ -164,15 +169,29 @@ def _build_records(
     *,
     max_mb: float | None,
     max_name_length: int,
+    name_separator: str,
+    exclude_names: list[str],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     records: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     used_names: dict[str, int] = {}
+    exclude_keywords = [item.strip().lower() for item in exclude_names if item.strip()]
 
     for path in files:
         size = path.stat().st_size
         size_mb = size / 1024 / 1024
-        upload_name = _build_upload_name(path, root, max_name_length)
+        upload_name = _build_upload_name(path, root, max_name_length, name_separator)
+        matched_exclude = next((keyword for keyword in exclude_keywords if keyword in path.name.lower() or keyword in upload_name.lower()), None)
+        if matched_exclude:
+            skipped.append(
+                {
+                    "path": str(path),
+                    "upload_name": upload_name,
+                    "size_mb": round(size_mb, 2),
+                    "reason": f"匹配 --exclude-name={matched_exclude}",
+                }
+            )
+            continue
         if max_mb is not None and size_mb > max_mb:
             skipped.append(
                 {
@@ -355,6 +374,62 @@ def _upload_batch(
     return [_normalize_document(document) for document in raw_documents if isinstance(document, dict)]
 
 
+def _load_json_object(raw_value: str, option_name: str) -> dict[str, Any]:
+    value = raw_value
+    if raw_value.startswith("@"):
+        path = Path(raw_value[1:]).expanduser()
+        try:
+            value = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ConfigError(f"读取 {option_name} 文件失败：{path}，{exc}") from exc
+
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"{option_name} 必须是合法 JSON：{exc.msg}") from exc
+
+    if not isinstance(payload, dict):
+        raise ConfigError(f"{option_name} 必须是 JSON 对象。")
+    return payload
+
+
+def _build_document_update_payload(plan: dict[str, Any]) -> dict[str, Any]:
+    update_options = plan.get("document_update") or {}
+    payload: dict[str, Any] = {}
+    if update_options.get("chunk_method"):
+        payload["chunk_method"] = update_options["chunk_method"]
+    if update_options.get("parser_config") is not None:
+        payload["parser_config"] = update_options["parser_config"]
+    if update_options.get("meta_fields") is not None:
+        payload["meta_fields"] = update_options["meta_fields"]
+    return payload
+
+
+def _update_uploaded_document(
+    dataset_id: str,
+    document_id: str,
+    payload: dict[str, Any],
+    *,
+    base_url: str,
+    api_key: str,
+) -> dict[str, Any]:
+    encoded_dataset_id = urllib.parse.quote(dataset_id, safe="")
+    encoded_document_id = urllib.parse.quote(document_id, safe="")
+    response = ensure_success(
+        request_json(
+            f"{base_url}/api/v1/datasets/{encoded_dataset_id}/documents/{encoded_document_id}",
+            api_key,
+            method="PUT",
+            body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            content_type="application/json",
+        )
+    )
+    data = response.get("data")
+    if not isinstance(data, dict):
+        raise DataError("更新文档解析配置响应缺少 data 对象。")
+    return _normalize_document(data)
+
+
 def _start_parse(dataset_id: str, document_ids: list[str], *, base_url: str, api_key: str) -> dict[str, Any]:
     if not document_ids:
         return {"requested": False, "document_ids": []}
@@ -403,6 +478,8 @@ def build_plan(args: argparse.Namespace, *, base_url: str, api_key: str) -> tupl
         root,
         max_mb=args.max_mb,
         max_name_length=args.max_name_length,
+        name_separator=args.name_separator,
+        exclude_names=args.exclude_name,
     )
 
     dataset = _resolve_dataset_id(args.dataset, base_url=base_url, api_key=api_key)
@@ -429,6 +506,13 @@ def build_plan(args: argparse.Namespace, *, base_url: str, api_key: str) -> tupl
         "dry_run": bool(args.dry_run),
         "start_parse": bool(args.start_parse),
         "batch_size": args.batch_size,
+        "name_separator": args.name_separator,
+        "exclude_name": args.exclude_name,
+        "document_update": {
+            "chunk_method": args.chunk_method,
+            "parser_config": _load_json_object(args.parser_config, "--parser-config") if args.parser_config else None,
+            "meta_fields": _load_json_object(args.meta_fields, "--meta-fields") if args.meta_fields else None,
+        },
         "upload": _summarize(records),
         "skipped": skipped + duplicate_skipped,
     })
@@ -454,6 +538,19 @@ def execute_upload(
         for document in uploaded_documents
         if isinstance(document.get("id"), str) and str(document.get("id")).strip()
     ]
+    update_payload = _build_document_update_payload(plan)
+    updated_documents: list[dict[str, Any]] = []
+    if update_payload:
+        for document_id in document_ids:
+            updated_documents.append(
+                _update_uploaded_document(
+                    dataset_id,
+                    document_id,
+                    update_payload,
+                    base_url=base_url,
+                    api_key=api_key,
+                )
+            )
     parse_result = None
     if plan.get("start_parse"):
         parse_result = _start_parse(dataset_id, document_ids, base_url=base_url, api_key=api_key)
@@ -463,6 +560,8 @@ def execute_upload(
         "dataset": plan["dataset"],
         "uploaded_count": len(uploaded_documents),
         "documents": uploaded_documents,
+        "updated_documents": updated_documents,
+        "document_update": plan.get("document_update"),
         "document_ids": document_ids,
         "parse": parse_result,
         "skipped": plan["skipped"],
@@ -478,7 +577,12 @@ def _format_plan_text(plan: dict[str, Any]) -> str:
         f"批大小：{plan['batch_size']}",
         f"是否只预览：{'是' if plan['dry_run'] else '否'}",
         f"上传后解析：{'是' if plan['start_parse'] else '否'}",
+        f"文档名连接符：{plan.get('name_separator') or '-'}",
     ]
+    document_update = plan.get("document_update") or {}
+    configured_updates = [key for key, value in document_update.items() if value not in (None, "")]
+    if configured_updates:
+        lines.append("上传后写入配置：" + "，".join(configured_updates))
     if upload["by_extension"]:
         lines.append("类型：" + "，".join(f"{key}={value}" for key, value in upload["by_extension"].items()))
     if upload["sample"]:
@@ -502,6 +606,8 @@ def _format_upload_text(payload: dict[str, Any]) -> str:
         f"跳过：{len(payload['skipped'])} 个文件",
     ]
     parse_result = payload.get("parse")
+    if payload.get("updated_documents"):
+        lines.append(f"已写入解析配置：{len(payload['updated_documents'])} 个文档")
     if isinstance(parse_result, dict):
         lines.append(f"已请求解析：{'是' if parse_result.get('requested') else '否'}")
     if payload["documents"]:
